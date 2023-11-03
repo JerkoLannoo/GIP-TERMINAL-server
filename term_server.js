@@ -50,6 +50,7 @@ else{
 const { Server } = require("socket.io");
 const io = new Server(server)
 io.on('connection', (socket) => {
+  console.log("C# connected")
   socket.on("get-code", (bcode)=>{
     console.log("got socket request")
     let code=""
@@ -91,7 +92,59 @@ io.on('connection', (socket) => {
   })
 });
 app.post("/check-code", function(req,res){
-  res.send({login: false})
+  con.query("SELECT * FROM users WHERE bcode="+req.body.bcode, function(err, result){
+    if (err) {
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else if (result.length) res.send({login: true})
+    else res.send({login: false})
+  })
+})
+app.post("/check-pin", function(req,res){
+  con.query("SELECT * FROM users WHERE bcode="+req.body.bcode+" AND pin=SHA2("+req.body.pincode+",512);", function(err, result){
+    if (err) {
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else if (result.length) res.send({login: true})
+    else res.send({login: false})
+  })
+})
+app.post("/get-user-info", function(req,res){
+  con.query("SELECT * FROM users WHERE bcode="+req.body.bcode+" AND pin=SHA2("+req.body.pincode+",512);", function(err, result){
+    if (err) {
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else if (result.length) res.send(result[0])
+    else res.send(result[0])
+  })
+})
+app.post("/get-user-beurten", function(req,res){
+  con.query("SELECT * FROM users WHERE bcode="+req.body.bcode+" AND pin=SHA2("+req.body.pincode+",512);", function(err, result){
+    if (err) {
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else if (result.length) {
+        con.query("SELECT * FROM beurten WHERE email='"+result[0].email+"'", function(err, result){
+          if (err) {
+            console.log(err)
+            res.sendStatus(500)
+          }
+          else if (result.length) {
+          let devices=0;
+            for(let i=0;i<result.length;i++) {
+              if(result[i].type==0) devices++
+            } 
+            res.send({devices: devices, gDevices: result.length-devices})
+          }
+         else res.send({devices: 0, gDevices: 0})
+      })
+    }
+    else res.send(400)
+  })
 })
 app.post("/register/terminal/send-status", function(req,res){
   console.log(req.body)
