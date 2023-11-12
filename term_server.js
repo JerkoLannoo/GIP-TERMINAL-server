@@ -17,7 +17,8 @@ var con = mysql.createConnection({
     host: "localhost",
     user: "root",
     password: "6IctGip2023",
-    database:"gip"
+    database:"gip",
+    multipleStatements:true
   });
   app.set('view engine', 'ejs');
 con.connect(function(err) {
@@ -117,8 +118,35 @@ app.post("/get-user-info", function(req,res){
       console.log(err)
       res.sendStatus(500)
     }
-    else if (result.length) res.send(result[0])
-    else res.send(result[0])
+    else if (result.length){
+       let saldo=result[0].saldo
+      con.query("SELECT * FROM beurten WHERE email='"+result[0].email+"'", function(err,result){
+        if(err) {
+          console.log(err)
+          res.sendStatus(500)
+        }
+        else if(result.length){
+          let devices=0
+          let gDevices=0;
+          let nDevices=0
+          let nGDevices=0
+          for(let i=0;i<result.length;i++) {
+          if(result[i].type==0&&result[0].activeDate<=Date.now()) devices++
+            else if(result[i].type==1&&result[0].activeDate<=Date.now()) gDevices++
+          } 
+             for(let i=0;i<result.length;i++) {
+          if(result[i].type==0&&result[0].activeDate>Date.now()) nDevices++
+            else if(result[i].type==1&&result[0].activeDate>Date.now()) {
+              console.log("ngdevice")
+               nGDevices++
+            }
+          } 
+          res.send({saldo:saldo, devices:devices, gDevices:gDevices, nGDevices: nGDevices, nDevices:nDevices})
+        }
+        else res.send({saldo:saldo, devices:0, gDevices:0, nGDevices: 0, nDevices:0})
+      })
+    }
+    else res.send(400)
   })
 })
 app.post("/get-user-beurten", function(req,res){
@@ -128,19 +156,36 @@ app.post("/get-user-beurten", function(req,res){
       res.sendStatus(500)
     }
     else if (result.length) {
-        con.query("SELECT * FROM beurten WHERE email='"+result[0].email+"'", function(err, result){
+        con.query("SELECT * FROM beurten WHERE email='"+result[0].email+"' AND type=0;", function(err, result){
           if (err) {
             console.log(err)
             res.sendStatus(500)
           }
           else if (result.length) {
-          let devices=0;
-            for(let i=0;i<result.length;i++) {
-              if(result[i].type==0) devices++
-            } 
-            res.send({devices: devices, gDevices: result.length-devices})
+            res.send(result)
           }
-         else res.send({devices: 0, gDevices: 0})
+         else res.send(result)
+      })
+    }
+    else res.send(400)
+  })
+})
+app.post("/get-guest-beurten", function(req,res){
+  con.query("SELECT * FROM users WHERE bcode="+req.body.bcode+" AND pin=SHA2("+req.body.pincode+",512);", function(err, result){
+    if (err) {
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else if (result.length) {
+        con.query("SELECT * FROM beurten WHERE email='"+result[0].email+"' AND type=1;", function(err, result){
+          if (err) {
+            console.log(err)
+            res.sendStatus(500)
+          }
+          else if (result.length) {
+            res.send(result)
+          }
+         else res.send(result)
       })
     }
     else res.send(400)
@@ -180,10 +225,118 @@ app.post("/register/terminal/send-scan", function(req,res){
   })
   res.sendStatus(200)
 })
+app.post("/add-guest-beurt", function(req,res){
+  con.query("SELECT * FROM users WHERE bcode="+req.body.bcode+" AND pin=SHA2('"+req.body.pincode+"',512); SELECT * FROM prijzen;",[1,2], function(err,result){
+    if(err){
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else if(result.length){
+  let price= calcPrice(result[1], req.body)
+       let str = "0123456789azeretyuiopqsdfghjklmwxcvbn"
+       let password=""
+       if(price<=result[0][0].saldo&&req.body.devices>0){
+        for(let i=0;i<8;i++) password+=str.charAt(Math.random()*str.length)
+           //voor normale apparaten
+             var datum = Math.floor(new Date().getTime()/1000)
+             console.log("price after calc:"+price)
+               con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",1,"+datum+",0,'"+result[0][0].username+"@gast_"+formatTime(req.body.duration)+"', '"+password+"');UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
+                 if(err){
+                  console.log(err)
+                  res.sendStatus(400)
+                 }
+                 else {
+                  res.send(JSON.stringify({success:true}))
+                  console.log("beurt toegevoegd")
+                 } 
+                 })
+       }
+       else if(req.body.devices==0) res.send(JSON.stringify({success:false, msg: "Vul alle velden in."}))
+       else res.send(JSON.stringify({success:false, msg: "Niet genoeg saldo."}))
+    }
+    else {
+      console.log("user not found")
+      res.sendStatus(400)
+    } 
+  })
+})
+app.post("/add-user-beurt", function(req,res){
+  con.query("SELECT * FROM users WHERE bcode="+req.body.bcode+" AND pin=SHA2('"+req.body.pincode+"',512); SELECT * FROM prijzen;",[1,2], function(err,result){
+    if(err){
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else if(result.length){
+  let price= calcPrice(result[1], req.body)
+       let str = "0123456789azeretyuiopqsdfghjklmwxcvbn"
+       let password=""
+       if(price<=result[0][0].saldo&&req.body.devices>0){
+        for(let i=0;i<8;i++) password+=str.charAt(Math.random()*str.length)
+           //voor normale apparaten
+             var datum = Math.floor(new Date().getTime()/1000)
+             console.log("price after calc:"+price)
+               con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",0,"+datum+",0,'"+result[0][0].username+"@gast_"+formatTime(req.body.duration)+"', '"+password+"');UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
+                 if(err){
+                  console.log(err)
+                  res.sendStatus(400)
+                 }
+                 else {
+                  res.send(JSON.stringify({success:true}))
+                  console.log("beurt toegevoegd")
+                 } 
+                 })
+       }
+       else if(req.body.devices==0) res.send(JSON.stringify({success:false, msg: "Vul alle velden in."}))
+       else res.send(JSON.stringify({success:false, msg: "Niet genoeg saldo."}))
+    }
+    else {
+      console.log("user not found")
+      res.sendStatus(400)
+    } 
+  })
+})
+app.get("/get-prijzen", function(req,res){
+  con.query("SELECT * FROM prijzen", function(err,result){
+    if (err){
+      console.log(err)
+      res.sendStatus(500)
+    }
+    else res.send(result)
+  })
+})
 app.get("/", function(req,res){
     res.sendFile(__dirname+"\\index.html")
 })
 server.listen(80, ()=>{
   console.log("luisteren ")
 })
- 
+function formatTime(time){
+  console.log("time: "+time)
+  if(time<24) return time +"h"
+  else if(time>=24&&time<720) {
+      console.log("tijd groter dan 24: "+time/24+time%24)
+      return (time/24)+"d"
+  }
+  else if(time>=720) {
+      console.log("tijd groter dan 24")
+      return (time/720)+"m"
+  }
+}
+   function calcPrice(prijzen,config){
+    let result=prijzen
+  let price=0.00
+  console.log(config)
+    for(let i=result.length-1;i>=0;i--){
+      console.log("calcing price 1")
+      if(result[i].devices<=config.devices&&result[i].time<=config.duration) {
+          console.log(price)
+          price=(result[i].price*config.devices*config.duration).toFixed(2);
+          console.log("prijs 1: "+price)
+         // break
+      }
+  }
+  console.log("price: "+price)
+return price
+    
+
+}
