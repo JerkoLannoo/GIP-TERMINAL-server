@@ -108,14 +108,14 @@ io.on('connection', (socket) => {
   })
 });
 app.post("/check-code", function(req,res){
-  con.query("SELECT * FROM users WHERE bcode='"+req.body.bcode+"'; SELECT email FROM doubleTap WHERE bcode = '"+req.body.bcode+"';",[1,2], function(err, result){
+  con.query("SELECT * FROM users WHERE bcode='"+req.body.bcode+"'; SELECT email, mac FROM doubleTap WHERE bcode = '"+req.body.bcode+"';",[1,2], function(err, result){
     if (err) {
       console.log(err)
       res.sendStatus(500)
     }
     else if (result[0].length) {
       let dbTap = result[1]
-      pfcon.query("SELECT * FROM node WHERE pid LIKE '"+result[0][0].username+"%' AND status = 'reg'", function(err, result){
+      pfcon.query("SELECT * FROM node WHERE pid LIKE '"+result[0][0].username+"%' AND status = 'reg' AND mac='"+dbTap[0].mac+"'", function(err, result){
         if(err) {
           console.log(err)
           res.sendStatus(500)
@@ -140,24 +140,30 @@ app.post("/check-pin", function(req,res){
   })
 })
 app.post("/quick-register", function(req,res){
-  con.query("SELECT mac FROM doubleTap WHERE bcode = "+JSON.stringify(req.body.bcode)+"; SELECT * FROM tijdprijzen WHERE time = 1;",[1,2], function(err, result){
+  con.query("SELECT mac FROM doubleTap WHERE bcode = "+JSON.stringify(req.body.bcode)+"; SELECT * FROM tijdprijzen WHERE time = 1; SELECT saldo FROM users WHERE bcode = "+JSON.stringify(req.body.bcode),[1,2,3], function(err, result){
     if(err){
       console.log(err)
       res.send(500)
     }
     else if(result[0].length){
-      regUser(result[0][0].mac, (success)=>{
-        if(success){
-          con.query("UPDATE users SET saldo = saldo - "+result[1][0].price, function(err,result){
-            if(err){
-              console.log(err)
-              res.send(500)
-            }
-            else res.send({success: true, msg: "Je apparaat is nu geregistreerd."})
-          })  
-        }
-        else res.send({success: true, msg: "Kon apparaat niet registreren."})
-      })
+      console.log("1")
+      if(result[1].price-result[2].saldo>=0){
+        regUser(result[0][0].mac, (success)=>{
+          if(success){
+            console.log(success)
+            console.log("is registered")
+            con.query("UPDATE users SET saldo = saldo - "+result[1][0].price, function(err,result){
+              if(err){
+                console.log(err)
+                res.send(500)
+              }
+              else res.send({success: true, msg: "Je apparaat is nu geregistreerd."})
+            })  
+          }
+          else res.send({success: false, msg: "Kon apparaat niet registreren."})
+        })
+      }
+      else res.send({success: false, msg: "Onvoldoende saldo."})
     }
     else res.send(400)
   })
@@ -354,7 +360,7 @@ app.post("/add-user-beurt", function(req,res){//veranderingen nodig, adblock en 
                if(req.body.adblock) suffix="-adblock"
                console.log("price after calculation:"+price+" ; beurten: "+result[3].length)
                console.log(result[3])
-                 con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",1,"+datum+",0,'"+result[0][0].username+"_"+formatTime(req.body.duration)+""+suffix+"', '"+password+"', false, null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
+                 con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",0,"+datum+",0,'"+result[0][0].username+"_"+formatTime(req.body.duration)+""+suffix+"', '"+password+"', false, null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
                    if(err){
                     console.log(err)
                     res.sendStatus(400)
@@ -449,39 +455,53 @@ function pfLogin (){
   httpreq.end(JSON.stringify(data))
 }
 function regUser(mac, callback){
-  console.log("current date is: "+new Date())
-  let datum = toIsoString(new Date(new Date().getTime()+3600000))//een uur vanaf nu
- // datum = datum.
-  console.log("een uur vanaf nu: "+datum)
-  process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
-    console.log("token: "+token + ", mac: "+mac)
-    let data={
-      "unregdate": datum,
-      "status" : "reg"
+  pfcon.query("SELECT * FROM node WHERE mac='"+mac+"' AND status='unreg'", function(err,result){
+    if(err){
+      console.log(err)
+      res.send(500)
     }
-    console.log(data)
-    var options = {
-      host: '192.168.100.2',
-      path: "/api/v1/node/"+mac,
-      port: 9999,
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization' : token
-      }
+    else if(result.length){
+      console.log("nog niet reg")
+      console.log("current date is: "+new Date())
+      let datum = toIsoString(new Date(new Date().getTime()+3600000))//een uur vanaf nu
+     // datum = datum.
+      console.log("een uur vanaf nu: "+datum)
+      process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
+        console.log("token: "+token + ", mac: "+mac)
+        let data={
+          "unregdate": datum,
+          "status" : "reg",
+          "category_id": "16"
+        }
+        console.log(data)
+        var options = {
+          host: '192.168.100.2',
+          path: "/api/v1/node/"+mac,
+          port: 9999,
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization' : token
+          }
+        }
+        var httpreq = https.request(options, function (response) {
+         // response.setEncoding('utf8');
+         console.log(response.statusCode +" "+ response.statusMessage)
+         if(response.statusCode==200){
+         callback(true)
+         }
+         else  callback("") 
+         response.on("error", ()=>{
+          callback("") 
+         })
+        });
+        httpreq.end(JSON.stringify(data))
     }
-    var httpreq = https.request(options, function (response) {
-     // response.setEncoding('utf8');
-     console.log(response.statusCode +" "+ response.statusMessage)
-     if(response.statusCode==200){
-     callback(true)
-     }
-     else  callback("") 
-     response.on("error", ()=>{
-      callback("") 
-     })
-    });
-    httpreq.end(JSON.stringify(data))
+    else{
+      console.log('al reg')
+      callback(false)
+    }
+  })
 }
 function toIsoString(date) {
   var tzo = -date.getTimezoneOffset(),
