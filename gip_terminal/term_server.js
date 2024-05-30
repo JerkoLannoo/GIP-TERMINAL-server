@@ -494,14 +494,10 @@ function regUser(mac, callback){
     }
     else if(result.length){
       console.log("nog niet reg")
-      console.log("current date is: "+new Date())
-      let datum = toIsoString(new Date(new Date().getTime()+3600000))//een uur vanaf nu
-     // datum = datum.
-      console.log("een uur vanaf nu: "+datum)
       process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
         console.log("token: "+token + ", mac: "+mac)
         let data={
-          "unregdate": datum,
+          "time_balance": 3600,
           "status" : "reg",
           "category_id": "16"
         }
