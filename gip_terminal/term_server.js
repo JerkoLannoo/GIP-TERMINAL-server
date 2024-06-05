@@ -18,7 +18,7 @@ const options = {
   key: fs.readFileSync("server-key.pem"), 
   cert: fs.readFileSync("server-cert.pem"), 
 }; 
-var server=http.createServer(app);
+var server=https.createServer(options, app);
 var con = mysql.createConnection({
     host: "localhost",
     user: "root",
@@ -160,9 +160,9 @@ app.post("/quick-register", function(req,res){
         res.send(500)
       }
       else if(result[0].length){
-        console.log("1")
+        console.log("1 mac: "+result[0][0].mac)
         if(result[4].length) res.send({success: false, msg: "Je bent verbannen."})
-        else if(result[1].price-result[2].saldo>=0){
+        else if(result[2][0].saldo-result[1][0].price>=0){
           regUser(result[0][0].mac, (success)=>{
             if(success){
               console.log(success)
@@ -220,8 +220,8 @@ app.post("/get-user-info", function(req,res){
             let nDevices=0;
             let nGDevices=0;
             for(let i=0;i<result.length;i++) {
-            if(result[i].type==0&&result[0].activeDate<=Date.now()) devices++
-              else if(result[i].type==1&&result[0].activeDate<=Date.now()) gDevices++
+            if(result[i].type==0&&result[0].activeDate<=Date.now()) devices+=result[i].devices
+              else if(result[i].type==1&&result[0].activeDate<=Date.now()) gDevices+=result[i].devices
               if(result[i].type==0&&result[i].used>0) used+=result[i].used
               if(result[i].type==1&&result[i].used>0) gUsed+=result[i].used
             } 
@@ -232,6 +232,7 @@ app.post("/get-user-info", function(req,res){
                  nGDevices++
               }
             } 
+            console.log("devices: "+devices)
             devices-=used;
             gDevices-=gUsed;
             res.send({saldo:saldo, devices:devices, gDevices:gDevices, nGDevices: nGDevices, nDevices:nDevices, username:username})
@@ -427,7 +428,7 @@ app.get("/get-prijzen", function(req,res){
 app.get("/", function(req,res){
     res.send(404)
 })
-server.listen(80, ()=>{
+server.listen(443,  ()=>{
   console.log("luisteren ")
 })
 function formatTime(time){
@@ -520,6 +521,7 @@ function regUser(mac, callback){
          }
          else  callback("") 
          response.on("error", ()=>{
+          console.log("error")
           callback("") 
          })
         });
