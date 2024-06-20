@@ -15,10 +15,11 @@ app.use(bodyParser.urlencoded({
   extended: true
 }));
 const options = { 
-  key: fs.readFileSync("server-key.pem"), 
-  cert: fs.readFileSync("server-cert.pem"), 
+  key: fs.readFileSync("rootCA.key"), 
+  cert: fs.readFileSync("rootCA.crt"), 
+  passphrase: '6IctGip2023'
 }; 
-var server=https.createServer(options, app);
+var server=http.createServer(app);
 var con = mysql.createConnection({
     host: "localhost",
     user: "root",
@@ -117,23 +118,28 @@ io.on('connection', (socket) => {
 });
 app.post("/check-code", function(req,res){
   if(req.body.key===passwd){
+    console.log(req.body)
     con.query("SELECT * FROM users WHERE bcode='"+req.body.bcode+"'; SELECT email, mac FROM doubleTap WHERE bcode = '"+req.body.bcode+"';",[1,2], function(err, result){
       if (err) {
         console.log(err)
         res.sendStatus(500)
       }
-      else if (result[0].length&&result[1].length) {
-        let dbTap = result[1]
-        pfcon.query("SELECT * FROM node WHERE pid LIKE '"+result[0][0].username+"%' AND status = 'reg' AND mac='"+dbTap[0].mac+"'", function(err, result){
-          if(err) {
-            console.log(err)
-            res.sendStatus(500)
-          }
-          else if(!result.length){
-            res.send({login: true, doubleTap: dbTap.length})
-          }
-          else res.send({login: true, doubleTap: 0})
-        })
+      else if (result[0].length) {
+        if(result[1].length){
+          let dbTap = result[1]
+          pfcon.query("SELECT * FROM node WHERE pid LIKE '"+result[0][0].username+"%' AND status = 'unreg' AND mac='"+dbTap[0].mac+"'", function(err, result){
+            console.log(result)
+            if(err) {
+              console.log(err)
+              res.sendStatus(500)
+            }
+            else if(result.length){
+              res.send({login: true, doubleTap: dbTap.length})
+            }
+            else res.send({login: true, doubleTap: 0})
+          })
+        }
+        else res.send({login: true, doubleTap: 0})
       }
       else res.send({login: false})
     })
@@ -152,6 +158,7 @@ app.post("/check-pin", function(req,res){
   }
 })
 app.post("/quick-register", function(req,res){
+  console.log(req.body)
   if(req.body.key===passwd){
     con.query("SELECT mac FROM doubleTap WHERE bcode = "+JSON.stringify(req.body.bcode)+"; SELECT * FROM tijdprijzen WHERE time = 1; SELECT saldo FROM users WHERE bcode = "+JSON.stringify(req.body.bcode)+
     "; SELECT email INTO @email FROM users WHERE bcode="+JSON.stringify(req.body.bcode)+"; SELECT * FROM blacklist WHERE email=@email;",[1,2,3,4,5], function(err, result){
@@ -392,7 +399,7 @@ app.post("/add-user-beurt", function(req,res){//veranderingen nodig, adblock en 
                  if(req.body.adblock) suffix="-adblock"
                  console.log("price after calculation:"+price+" ; beurten: "+result[3].length)
                  console.log(result[3])
-                   con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",0,"+datum+",0,'"+result[0][0].username+"_"+formatTime(req.body.duration)+""+suffix+"', '"+password+"', false, null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
+                   con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",0,"+datum+",0,'"+result[0][0].username+"_"+formatTime(req.body.duration)+""+suffix+"', '"+result[0][0].password+"', false, null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
                      if(err){
                       console.log(err)
                       res.sendStatus(400)
@@ -428,7 +435,7 @@ app.get("/get-prijzen", function(req,res){
 app.get("/", function(req,res){
     res.send(404)
 })
-server.listen(443,  ()=>{
+server.listen(80,  ()=>{
   console.log("luisteren ")
 })
 function formatTime(time){
