@@ -355,7 +355,7 @@ app.post("/add-guest-beurt", function(req,res){//veranderingen nodig, adblock en
                  var datum = new Date().getTime()
                  if(req.body.adblock) suffix="-adblock"
                  console.log("price after calculation:"+price+" ; beurten: "+result[3].length)
-                   con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",1,"+datum+",0,'"+result[0][0].username+"@gast_"+formatTime(req.body.duration)+""+suffix+"', '"+password+"', false, null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
+                   con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",1,"+datum+",0,'"+result[0][0].username+"@gast_"+formatTime(req.body.duration)+""+suffix+"', '"+password+"', "+req.body.adblock+", null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
                      if(err){
                       console.log(err)
                       res.sendStatus(400)
@@ -399,7 +399,7 @@ app.post("/add-user-beurt", function(req,res){//veranderingen nodig, adblock en 
                  if(req.body.adblock) suffix="-adblock"
                  console.log("price after calculation:"+price+" ; beurten: "+result[3].length)
                  console.log(result[3])
-                   con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",0,"+datum+",0,'"+result[0][0].username+"_"+formatTime(req.body.duration)+""+suffix+"', '"+result[0][0].password+"', false, null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
+                   con.query("INSERT INTO beurten VALUES('"+result[0][0].email+"',"+req.body.devices+","+req.body.duration+",null,'"+datum+"',"+price+",0,"+datum+",0,'"+result[0][0].username+"_"+formatTime(req.body.duration)+""+suffix+"', '"+result[0][0].password+"', "+req.body.adblock+", null);UPDATE users SET saldo=saldo-"+price+" WHERE email='"+result[0][0].email+"'",[1,2], function(err,result){
                      if(err){
                       console.log(err)
                       res.sendStatus(400)
